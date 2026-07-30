@@ -1,0 +1,112 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Instructions annuités — Axe PI</title>
+<style>
+body{font-family:'Century Gothic',Arial,sans-serif;max-width:900px;margin:24px auto;padding:0 14px;color:#222;font-size:14px}
+h1{text-align:center;font-size:22px;letter-spacing:.5px}
+.ref{color:#666;text-align:center}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border:1px solid #ccc;padding:7px 8px;text-align:left}
+th{background:#f2f2f2}td.n{text-align:right}
+.tot{font-size:16px;font-weight:bold;margin:14px 0;text-align:right}
+button{background:#a4243b;color:#fff;border:0;border-radius:8px;padding:12px 26px;font-size:15px;cursor:pointer}
+button:disabled{background:#bbb;cursor:default}
+.fige-p{color:#1c7c3c;background:#f2f9f4;text-align:center}
+.fige-a{color:#666}
+.avert{color:#b00020;font-size:11.5px;font-style:italic}
+label{cursor:pointer;white-space:nowrap}
+.done{border:1px solid #1c7c3c;background:#f2f9f4;border-radius:8px;padding:14px;margin:14px 0;text-align:center;font-weight:bold}
+.err{border:1px solid #a4243b;background:#faf3f4;border-radius:8px;padding:14px;margin:14px 0;text-align:center}
+#page{display:none}
+.marque{text-align:center;color:#a4243b;font-weight:700;font-size:18px;letter-spacing:2px;margin-bottom:2px}
+</style></head><body>
+<p class="marque">AXE PI</p>
+<h1>Annuités — instructions de paiement</h1>
+<div id="chargement" style="text-align:center;color:#666">Chargement de votre dossier…</div>
+<div id="erreur" class="err" style="display:none"></div>
+<div id="page">
+<p class="ref" id="entete"></p>
+<p>Merci d'indiquer, pour chaque titre, si vous souhaitez <strong>maintenir</strong>
+(payer l'annuité) ou <strong>abandonner</strong>. Le total se met à jour
+automatiquement (honoraires de gestion inclus dans les prix affichés). Les
+paiements validés sont définitifs ; un abandon reste modifiable vers
+« Payer » ; les lignes sans instruction pourront être complétées plus tard
+via ce même lien.</p>
+<table id="t"><tr><th>Pays</th><th>Dossier</th><th>N° demande</th><th>Annuité</th>
+<th>Échéance</th><th>HT (€)</th><th>TTC (€)</th><th>Payer</th><th>Abandonner</th></tr></table>
+<p class="tot">Total sélection : <span id="ht">0</span> € HT — <span id="ttc">0</span> € TTC</p>
+<p style="text-align:center"><button id="go">✓ Valider mes instructions</button></p>
+<p id="msg" class="done" style="display:none"></p>
+</div>
+<p class="avert">Les montants sont exprimés en euros à titre estimatif ; ils
+peuvent différer du montant final facturé après application des taux de change,
+des taxes officielles définitives et des frais de service. Les instructions de
+paiement validées sont définitives. En cas de difficulté :
+axepi@axepi.com.</p>
+<script>
+const API_BASE = "https://ovvlzllldfeebhqbhhow.supabase.co/functions/v1/axepi-annuites";
+const token = new URLSearchParams(location.search).get("t") || "";
+const API = API_BASE + "?t=" + encodeURIComponent(token);
+let L = [];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function montreErreur(t){document.getElementById("chargement").style.display="none";
+ const e=document.getElementById("erreur");e.style.display="block";e.textContent=t;}
+function totaux(){let h=0,c=0;
+ document.querySelectorAll("input[type=radio]:checked").forEach(r=>{
+  if(r.value==="PAYER"){const l=L.find(x=>x.ref===r.dataset.ref);if(l){h+=l.ht;c+=l.ttc;}}});
+ document.getElementById("ht").textContent=h;document.getElementById("ttc").textContent=c;}
+function rendre(d){
+ document.getElementById("chargement").style.display="none";
+ document.getElementById("page").style.display="block";
+ document.getElementById("entete").textContent =
+  (d.vref ? "VRef. "+d.vref+" | " : "") + "NRef. AXP-"+d.famille +
+  (d.client_nom ? " — "+d.client_nom : "");
+ L = d.lignes; const dec = d.decisions || {}; const t = document.getElementById("t");
+ while(t.rows.length>1)t.deleteRow(1);
+ L.forEach((l,i)=>{
+  const r=t.insertRow(-1); const dej=dec[l.ref]; const choix=dej&&(dej.choix||dej);
+  let cases;
+  if(choix==="PAYER"){
+   cases='<td colspan="2" class="fige-p">✔ PAYER (enregistré)</td>';
+  }else if(choix==="ABANDONNER"){
+   cases='<td style="text-align:center"><label><input type="radio" name="c'+i+'" data-ref="'+esc(l.ref)+'" value="PAYER"> oui</label></td>'+
+         '<td class="fige-a">✔ ABANDONNER<br><em style="font-size:10.5px">modifiable : cochez « Payer » pour reprendre</em></td>';
+  }else{
+   cases='<td style="text-align:center"><label><input type="radio" name="c'+i+'" data-ref="'+esc(l.ref)+'" value="PAYER"> oui</label></td>'+
+         '<td style="text-align:center"><label><input type="radio" name="c'+i+'" data-ref="'+esc(l.ref)+'" value="ABANDONNER"> oui</label></td>';
+  }
+  r.innerHTML="<td>"+esc(l.pays_nom)+"</td><td>"+esc(l.ref)+"</td><td>"+esc(l.numero)+
+   "</td><td style='text-align:center'>"+esc(l.annuite)+"</td><td style='text-align:center'>"+
+   esc(l.echeance)+"</td><td class='n'>"+esc(l.ht)+"</td><td class='n'>"+esc(l.ttc)+"</td>"+cases;
+ });
+ t.onchange = totaux; totaux();
+}
+async function charger(){
+ if(!token){montreErreur("Lien incomplet — merci d'utiliser le lien reçu par email.");return;}
+ try{
+  const res=await fetch(API);
+  if(res.status===404){montreErreur("Ce lien n'existe pas ou n'est plus actif. Merci de contacter le cabinet Axe PI (axepi@axepi.com).");return;}
+  if(res.status===410){montreErreur("Ce lien a expiré. Merci de contacter le cabinet Axe PI (axepi@axepi.com) pour recevoir un nouveau lien.");return;}
+  rendre(await res.json());
+ }catch(e){montreErreur("Connexion impossible — merci de réessayer, ou de nous répondre par email (axepi@axepi.com).");}
+}
+document.getElementById("go").addEventListener("click", async ()=>{
+ const dec={};document.querySelectorAll("input[type=radio]:checked").forEach(r=>dec[r.dataset.ref]=r.value);
+ if(!Object.keys(dec).length){alert("Cochez au moins une ligne.");return;}
+ if(!confirm("Confirmer ces instructions ?\nLes PAIEMENTS validés sont définitifs (un abandon reste modifiable vers « Payer »)."))return;
+ const go=document.getElementById("go");go.disabled=true;
+ try{
+  const res=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decisions:dec})});
+  const d=await res.json();
+  if(res.ok&&d.ok){
+   const m=document.getElementById("msg");m.style.display="block";
+   m.textContent="✔ Instructions transmises au cabinet Axe PI — merci ! Vous pouvez fermer cette page, ou y revenir pour les lignes restantes.";
+   await charger();go.disabled=false;return;
+  }
+  throw new Error(d.erreur||"erreur");
+ }catch(e){alert("L'enregistrement a échoué — merci de réessayer ou de nous répondre par email (axepi@axepi.com).");go.disabled=false;}
+});
+charger();
+</script></body></html>
